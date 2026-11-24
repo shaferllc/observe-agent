@@ -84,7 +84,7 @@ Then turn off the server's heartbeat in Observe, or delete the server, so the to
 
 ## Security
 
-- The token is only a heartbeat token: it can post samples for that one server and nothing else. It lives in `/etc/observe-agent.env`, readable by root only. Turning off the heartbeat in Observe revokes it.
+- The token is only a heartbeat token: it can only report for that one server (agent samples and heartbeat pings). It lives in `/etc/observe-agent.env`, readable by root only. Turning off the heartbeat in Observe revokes it.
 - The service runs as an unprivileged dynamic user with `NoNewPrivileges`, a read-only filesystem (`ProtectSystem=strict`, `ProtectHome=read-only`) and a private `/tmp`.
 - The install script checks the binary against `checksums.txt` from the same release. That catches a corrupted or truncated download, but not a compromised release, since both files come from the same place. If that matters to you, build from source (`go build`) and compare.
 - To report a security issue, email support@observe.live (see [observe.live/security](https://observe.live/security)) rather than opening a public issue.
@@ -98,7 +98,7 @@ go build -o observe-agent .
 
 Releases are built with [GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`): static Linux binaries for amd64 and arm64, plus `checksums.txt`.
 
-This repository is published from the Observe monorepo, where the agent is developed; pull requests here are welcome and get applied there.
+This repository is a read-only mirror of the agent in the Observe monorepo, where it is developed. Issues are welcome; a pull request here gets applied in the monorepo and synced back, so it is closed rather than merged.
 
 ## License
 
