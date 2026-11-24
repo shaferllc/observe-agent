@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,9 @@ tmpfs /run tmpfs rw 0 0
 /dev/sdb1 /mnt/my\040data xfs rw 0 0
 /dev/sda1 /var/lib/docker/bind ext4 rw 0 0
 overlay /var/lib/docker/overlay2/x/merged overlay rw 0 0
+server:/export /mnt/nfs nfs4 rw 0 0
+/dev/sdc1 /var/lib/kubelet/pods/abc/volumes/x ext4 rw 0 0
+/dev/loop3 /snap/core/1 squashfs ro 0 0
 `))
 	if strings.Join(got, "|") != "/|/mnt/my data" {
 		t.Fatalf("mounts = %q", got)
@@ -102,5 +106,23 @@ func TestCollectFirstSampleHasNoRates(t *testing.T) {
 	os.WriteFile(filepath.Join(proc, "stat"), []byte("cpu 2 0 2 16 0 0 0 0\n"), 0o644)
 	if s := c.Collect(time.Unix(160, 0), nil); s.CPUPct == nil || *s.CPUPct != 20 {
 		t.Fatalf("second sample cpu = %v", s.CPUPct)
+	}
+}
+
+func TestCollectKeepsTheLargestDisksWhenThereAreTooMany(t *testing.T) {
+	proc := t.TempDir()
+	var mounts strings.Builder
+	for i := 0; i < 40; i++ {
+		mounts.WriteString("pool/ds" + strconv.Itoa(i) + " /tank/ds" + strconv.Itoa(i) + " zfs rw 0 0\n")
+	}
+	mountsFile := filepath.Join(proc, "mounts")
+	os.WriteFile(mountsFile, []byte(mounts.String()), 0o644)
+	c := &Collector{Proc: proc, mountsFile: mountsFile, statfs: func(p string) (Disk, bool) {
+		n, _ := strconv.Atoi(strings.TrimPrefix(p, "/tank/ds"))
+		return Disk{Mount: p, Total: uint64(n + 1)}, true
+	}}
+	s := c.Collect(time.Unix(1, 0), nil)
+	if len(s.Disks) != MaxDisks || s.Disks[0].Mount != "/tank/ds39" || s.Disks[MaxDisks-1].Mount != "/tank/ds8" {
+		t.Fatalf("disks = %d, first %s, last %s", len(s.Disks), s.Disks[0].Mount, s.Disks[len(s.Disks)-1].Mount)
 	}
 }

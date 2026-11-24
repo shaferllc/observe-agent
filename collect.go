@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -102,6 +103,7 @@ func (c *Collector) Collect(now time.Time, processes []string) Sample {
 			}
 		}
 		f.Close()
+		s.Disks = largestDisks(s.Disks)
 	}
 	if len(processes) > 0 {
 		s.Processes = runningProcesses(c.Proc, processes)
@@ -267,7 +269,16 @@ var pseudoFS = map[string]bool{
 	"mqueue": true, "hugetlbfs": true, "fusectl": true, "configfs": true, "bpf": true, "autofs": true,
 	"binfmt_misc": true, "nsfs": true, "rpc_pipefs": true, "ramfs": true, "efivarfs": true, "fuse.lxcfs": true,
 	"selinuxfs": true, "nfsd": true, "fuse.snapfuse": true, "iso9660": true,
+	// Network filesystems: statfs on a hung one blocks, which would stall every sample.
+	"nfs": true, "nfs4": true, "cifs": true, "smb3": true, "smbfs": true, "fuse.sshfs": true, "ceph": true,
+	"glusterfs": true, "fuse.glusterfs": true, "9p": true, "afs": true,
 }
+
+// Container and snap mount points: one per layer, volume or pod, and not the host's own disks.
+var skippedMountPrefixes = []string{"/var/lib/docker/", "/var/lib/kubelet/", "/var/lib/containers/", "/run/containerd/", "/snap/"}
+
+// MaxDisks matches the most mounts Observe takes per sample.
+const MaxDisks = 32
 
 // parseMounts lists the mount points of real filesystems, once per device (bind mounts repeat one).
 func parseMounts(r io.Reader) []string {
@@ -279,10 +290,32 @@ func parseMounts(r io.Reader) []string {
 		if len(f) < 3 || pseudoFS[f[2]] || seen[f[0]] {
 			continue
 		}
+		mount := unescapeMount(f[1])
+		if hasAnyPrefix(mount, skippedMountPrefixes) {
+			continue
+		}
 		seen[f[0]] = true
-		out = append(out, unescapeMount(f[1]))
+		out = append(out, mount)
 	}
 	return out
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// largestDisks keeps the MaxDisks biggest filesystems (a ZFS host has a mount per dataset).
+func largestDisks(disks []Disk) []Disk {
+	if len(disks) <= MaxDisks {
+		return disks
+	}
+	sort.SliceStable(disks, func(i, j int) bool { return disks[i].Total > disks[j].Total })
+	return disks[:MaxDisks]
 }
 
 // unescapeMount decodes /proc/mounts' octal escapes (\040 is a space).
