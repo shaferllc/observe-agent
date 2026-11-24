@@ -1,0 +1,29 @@
+# Static Linux binaries plus checksums.txt, published as a GitHub release. install.sh downloads
+# observe-agent_linux_<arch> and checksums.txt from OBSERVE_AGENT_DOWNLOAD_URL (default: this repo's latest release),
+# so keep these names in step with it.
+version: 2
+project_name: observe-agent
+
+builds:
+  - binary: observe-agent
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+
+archives:
+  - formats: [binary]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: shaferllc
+    name: observe-agent
+
+changelog:
+  disable: true

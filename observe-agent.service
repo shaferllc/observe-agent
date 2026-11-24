@@ -1,0 +1,19 @@
+[Unit]
+Description=Observe server agent (CPU, memory, disk, load, network)
+Documentation=https://observe.live/docs/server-agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/observe-agent.env
+ExecStart=/usr/local/bin/observe-agent
+Restart=always
+RestartSec=10
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
